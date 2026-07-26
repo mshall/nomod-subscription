@@ -563,19 +563,19 @@ sequenceDiagram
     participant CHG as Charges Svc
     participant ACQ as Acquirer
     participant LED as Ledger
-    participant OUT as Outbox/Events
+    participant OUT as Outbox Events
 
-    WF->>BILL: period due (subscription_id)
-    BILL->>BILL: acquire advisory lock + lease
-    BILL->>INV: create invoice (UNIQUE period_key)
-    INV-->>BILL: invoice_id (or existing)
-    BILL->>CHG: charge (Idempotency-Key = sub:period, MIT)
+    WF->>BILL: period due for subscription
+    BILL->>BILL: acquire advisory lock and lease
+    BILL->>INV: create invoice with unique period key
+    INV-->>BILL: invoice id or existing
+    BILL->>CHG: charge with idempotency key, MIT
     CHG->>ACQ: authorize stored credential
     ACQ-->>CHG: approved
     CHG->>LED: post double-entry
-    CHG->>OUT: emit invoice.paid
+    CHG->>OUT: emit invoice paid
     CHG-->>BILL: success
-    BILL->>BILL: advance next_run_at; release lock
+    BILL->>BILL: advance next run and release lock
 ```
 
 ### 9.3 Failed payment → smart dunning
@@ -588,24 +588,24 @@ sequenceDiagram
     participant DUN as Dunning Engine
     participant WF as Workflow Engine
     participant AU as Account Updater
-    participant COMMS as WhatsApp/Email
+    participant COMMS as WhatsApp Email
 
-    CHG->>OUT: invoice.payment_failed (decline_code)
+    CHG->>OUT: invoice payment failed with decline code
     OUT->>DUN: consume event
     DUN->>DUN: classify soft vs hard decline
-    alt hard decline (stolen/lost)
-        DUN->>COMMS: notify; stop retries
-        DUN->>DUN: mark for cancel/unpaid
+    alt hard decline, stolen or lost
+        DUN->>COMMS: notify and stop retries
+        DUN->>DUN: mark for cancel or unpaid
     else soft decline
-        DUN->>WF: schedule retry curve (d1,d3,d5,d7)
-        WF->>AU: refresh token (account updater)
-        AU-->>WF: updated token (maybe)
-        WF->>CHG: retry charge (same idempotency discipline)
+        DUN->>WF: schedule retry curve d1 d3 d5 d7
+        WF->>AU: refresh token via account updater
+        AU-->>WF: updated token if available
+        WF->>CHG: retry charge with same idempotency
         alt recovered
-            CHG-->>DUN: success → status active
+            CHG-->>DUN: success, status active
         else exhausted
-            DUN->>COMMS: final notice + update-card link
-            DUN->>DUN: status = unpaid
+            DUN->>COMMS: final notice and update card link
+            DUN->>DUN: status unpaid
         end
     end
 ```
